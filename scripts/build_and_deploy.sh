@@ -68,60 +68,82 @@ ORACLE_CONTRACT_ID=$(stellar contract deploy \
 echo "$ORACLE_CONTRACT_ID" > "$KEYS_DIR/oracle_contract_id.txt"
 echo -e "  📋 Oracle Contract ID: ${CYAN}$ORACLE_CONTRACT_ID${NC}"
 
-# Define Mock initial prices
-echo -e "  -> Initializing Oracle and setting mock prices..."
-stellar contract invoke --id "$ORACLE_CONTRACT_ID" --source-account issuer --network testnet -- initialize --admin issuer
-stellar contract invoke --id "$ORACLE_CONTRACT_ID" --source-account issuer --network testnet -- set_price --base XAU --quote USD --price 25000000000
-stellar contract invoke --id "$ORACLE_CONTRACT_ID" --source-account issuer --network testnet -- set_price --base USD --quote ARS --price 10000000000
+ stellar contract optimize --wasm "$AURUM_WASM"
 
-echo -e "  ✅ Oracle prices set: 1 XAU = 2500 USD | 1 USD = 1000 ARS"
+ORACLE_OPT="${ORACLE_WASM%.wasm}.optimized.wasm"
+AURUM_OPT="${AURUM_WASM%.wasm}.optimized.wasm"
 
-# ============================================================================
-# 4. Deploy Aurum to Testnet
-# ============================================================================
-echo -e "\n${YELLOW}[4/5] Deploying Aurum Contract...${NC}"
-
-AURUM_CONTRACT_ID=$(stellar contract deploy \
-    --wasm "$AURUM_OPT_WASM" \
-    --source-account issuer \
-    --network testnet 2>/dev/null)
-
-echo "$AURUM_CONTRACT_ID" > "$KEYS_DIR/aurum_contract_id.txt"
-echo -e "  📋 Aurum Contract ID: ${CYAN}$AURUM_CONTRACT_ID${NC}"
+echo -e "  ✅ WASMs optimized"
 
 # ============================================================================
-# 5. Initialize Aurum contract
+# 3. Deploy to Testnet
 # ============================================================================
-echo -e "\n${YELLOW}[5/5] Initializing AURUM contract...${NC}"
 
+echo -e "\n${YELLOW}[3/5] Deploying to Testnet...${NC}"
+
+ORACLE_ID=$(stellar contract deploy --wasm "$ORACLE_OPT" --source-account issuer --network testnet)
+echo "$ORACLE_ID" > "$KEYS_DIR/oracle_contract_id.txt"
+echo -e "  📋 Oracle Contract ID: ${CYAN}$ORACLE_ID${NC}"
+
+AURUM_ID=$(stellar contract deploy --wasm "$AURUM_OPT" --source-account issuer --network testnet)
+echo "$AURUM_ID" > "$KEYS_DIR/aurum_contract_id.txt"
+echo -e "  📋 Aurum Contract ID: ${CYAN}$AURUM_ID${NC}"
+
+# ============================================================================
+# 4. Initialize Oracle and Set Prices
+# ============================================================================
+
+echo -e "\n${YELLOW}[4/5] Initializing SEP-40 Oracle...${NC}"
 source "$KEYS_DIR/addresses.env"
+
+# Init Oracle: Admin, Base="USD" (Other variant), Decimals=7, Resolution=300
+stellar contract invoke --id "$ORACLE_ID" --source-account issuer --network testnet \
+    -- initialize \
+    --admin "$ISSUER_ADDR" \
+    --base '{"Other":["USD"]}' \
+    --decimals 7 \
+    --resolution 300
+
+# Set Price: XAU -> USD = 2000 USD (2000_0000000)
+stellar contract invoke --id "$ORACLE_ID" --source-account issuer --network testnet \
+    -- set_price \
+    --base_asset '{"Other":["XAU"]}' \
+    --quote_asset '{"Other":["USD"]}' \
+    --price 20000000000
+
+# Set Price: USD -> ARS = 1000 ARS (1000_0000000)
+stellar contract invoke --id "$ORACLE_ID" --source-account issuer --network testnet \
+    -- set_price \
+    --base_asset '{"Other":["USD"]}' \
+    --quote_asset '{"Other":["ARS"]}' \
+    --price 10000000000
+
+echo -e "  ✅ Oracle initialized with XAU=\$2000 and USD=\$1000 ARS"
+
+# ============================================================================
+# 5. Initialize AURUM
+# ============================================================================
+
+echo -e "\n${YELLOW}[5/5] Initializing AURUM contract...${NC}"
 GOLD_CONTRACT_ID=$(cat "$KEYS_DIR/gold_contract_id.txt")
 
-echo -e "  Admin:       ${CYAN}$ISSUER_ADDR${NC}"
-echo -e "  GOLD Token:  ${CYAN}$GOLD_CONTRACT_ID${NC}"
-echo -e "  Oracle Addr: ${CYAN}$ORACLE_CONTRACT_ID${NC}"
-
-stellar contract invoke \
-    --id "$AURUM_CONTRACT_ID" \
-    --source-account issuer \
-    --network testnet \
-    -- \
-    initialize \
+stellar contract invoke --id "$AURUM_ID" --source-account issuer --network testnet \
+    -- initialize \
     --admin "$ISSUER_ADDR" \
     --gold_token "$GOLD_CONTRACT_ID" \
-    --oracle_address "$ORACLE_CONTRACT_ID"
+    --oracle_address "$ORACLE_ID"
 
-echo -e "  ✅ Contract initialized!"
+echo -e "  ✅ Aurum initialized with Oracle integration!"
 
 # ============================================================================
 # Summary
 # ============================================================================
 
 echo -e "\n${GREEN}════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  ✅ Full Architecture Deployment Complete!${NC}"
+echo -e "${GREEN}  ✅ Deployment Complete!${NC}"
 echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
 echo -e ""
-echo -e "  ${CYAN}AURUM Contract:${NC}  $AURUM_CONTRACT_ID"
-echo -e "  ${CYAN}ORACLE Contract:${NC} $ORACLE_CONTRACT_ID"
+echo -e "  ${CYAN}Oracle Contract:${NC} $ORACLE_ID"
+echo -e "  ${CYAN}AURUM Contract:${NC}  $AURUM_ID"
 echo -e "  ${CYAN}GOLD Token SAC:${NC}  $GOLD_CONTRACT_ID"
 echo -e ""

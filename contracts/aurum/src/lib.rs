@@ -1,8 +1,22 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, vec, Address, Env, Symbol, IntoVal,
+    contract, contractevent, contractimpl, contracttype, token, vec, Address, Env, Symbol, IntoVal, Vec
 };
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Asset {
+    Stellar(Address),
+    Other(Symbol),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PriceData {
+    pub price: i128,
+    pub timestamp: u64,
+}
 
 // ============================================================================
 // Events
@@ -97,17 +111,19 @@ impl AurumContract {
     fn get_cross_oracle_price(env: &Env) -> i128 {
         let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
 
-        // 1. Fetch XAU -> USD price from Oracle
-        let xau_sym = Symbol::new(env, "XAU");
-        let usd_sym = Symbol::new(env, "USD");
-        let ars_sym = Symbol::new(env, "ARS");
+        let xau_asset = Asset::Other(Symbol::new(env, "XAU"));
+        let usd_asset = Asset::Other(Symbol::new(env, "USD"));
+        let ars_asset = Asset::Other(Symbol::new(env, "ARS"));
         
-        let args_xau_usd = vec![env, xau_sym.into_val(env), usd_sym.into_val(env)];
-        let xau_usd: i128 = env.invoke_contract(&oracle_addr, &Symbol::new(env, "get_price"), args_xau_usd);
+        // 1. Fetch XAU -> USD price from Oracle
+        let args_xau_usd = vec![env, xau_asset.into_val(env), usd_asset.clone().into_val(env), 0u64.into_val(env)];
+        let xau_usd_opt: Option<PriceData> = env.invoke_contract(&oracle_addr, &Symbol::new(env, "cross_price"), args_xau_usd);
+        let xau_usd = xau_usd_opt.expect("XAU/USD price not found").price;
 
         // 2. Fetch USD -> ARS price from Oracle
-        let args_usd_ars = vec![env, usd_sym.into_val(env), ars_sym.into_val(env)];
-        let usd_ars: i128 = env.invoke_contract(&oracle_addr, &Symbol::new(env, "get_price"), args_usd_ars);
+        let args_usd_ars = vec![env, usd_asset.into_val(env), ars_asset.into_val(env), 0u64.into_val(env)];
+        let usd_ars_opt: Option<PriceData> = env.invoke_contract(&oracle_addr, &Symbol::new(env, "cross_price"), args_usd_ars);
+        let usd_ars = usd_ars_opt.expect("USD/ARS price not found").price;
 
         // 3. Compute XAU -> ARS cross rate.
         // Both returned values have 7 decimals. So 1 XAU = (xau_usd * usd_ars) / 10^7

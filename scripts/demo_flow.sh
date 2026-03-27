@@ -23,6 +23,7 @@ KEYS_DIR="$PROJECT_DIR/.keys"
 source "$KEYS_DIR/addresses.env"
 GOLD_CONTRACT_ID=$(cat "$KEYS_DIR/gold_contract_id.txt")
 AURUM_CONTRACT_ID=$(cat "$KEYS_DIR/aurum_contract_id.txt")
+ORACLE_CONTRACT_ID=$(cat "$KEYS_DIR/oracle_contract_id.txt")
 
 clear
 
@@ -54,31 +55,38 @@ bash "$SCRIPT_DIR/oracle_feeder.sh" 2>/dev/null || echo -e "  ${YELLOW}⚠️  O
 sleep 2
 
 # ============================================================================
-# Scene 1: Show Oracle Price (now REAL, not hardcoded)
+# Scene 1: Show Oracle Price (SEP-40)
 # ============================================================================
 
-echo -e "\n${BOLD}${YELLOW}━━━ SCENE 1: 📈 Oracle Price Check (LIVE DATA) ━━━${NC}"
+echo -e "\n${BOLD}${YELLOW}━━━ SCENE 1: SEP-40 Oracle Price Check ━━━${NC}"
 
-ORACLE_PRICE=$(stellar contract invoke \
-    --id "$AURUM_CONTRACT_ID" \
+echo -e "  🔍 Fetching on-chain prices from Oracle: ${CYAN}$ORACLE_CONTRACT_ID${NC}"
+
+XAU_USD=$(stellar contract invoke \
+    --id "$ORACLE_CONTRACT_ID" \
     --network testnet \
     --source-account user1 \
     -- \
-    get_oracle_price 2>/dev/null | tr -d '"')
+    cross_price \
+    --base_asset '{"Other":["XAU"]}' \
+    --quote_asset '{"Other":["USD"]}' \
+    --timestamp 0 2>/dev/null | tr -d '\n')
 
-ORACLE_SOURCE=$(stellar contract invoke \
-    --id "$AURUM_CONTRACT_ID" \
+USD_ARS=$(stellar contract invoke \
+    --id "$ORACLE_CONTRACT_ID" \
     --network testnet \
     --source-account user1 \
     -- \
-    get_oracle_source 2>/dev/null | tr -d '"')
+    cross_price \
+    --base_asset '{"Other":["USD"]}' \
+    --quote_asset '{"Other":["ARS"]}' \
+    --timestamp 0 2>/dev/null | tr -d '\n')
 
-# Convert from 7 decimals
-FORMATTED_PRICE=$(echo "scale=2; $ORACLE_PRICE / 10000000" | bc 2>/dev/null || echo "$ORACLE_PRICE")
+echo -e "  📈 XAU -> USD: ${MAGENTA}$XAU_USD${NC}"
+echo -e "  📈 USD -> ARS: ${MAGENTA}$USD_ARS${NC}"
+echo -e "  📈 Cross rate used automatically by Aurum for checkout"
 
-echo -e "  📈 Current GOLD Price: ${MAGENTA}$ORACLE_PRICE${NC} (raw, 7 decimals)"
-echo -e "  📈 Human readable:     ${MAGENTA}1 gram gold = $FORMATTED_PRICE ARS${NC}"
-echo -e "  📡 Source:             ${CYAN}$ORACLE_SOURCE${NC}"
+# Done fetching prices
 
 sleep 2
 
