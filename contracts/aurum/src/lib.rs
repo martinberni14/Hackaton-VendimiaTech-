@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, Env,
+    contract, contractevent, contractimpl, contracttype, token, Address, Env, String,
 };
 
 // ============================================================================
@@ -20,6 +20,8 @@ pub struct InitEvent {
 #[derive(Clone, Debug)]
 pub struct OraclePriceUpdated {
     pub new_price: i128,
+    pub source: String,
+    pub timestamp: u64,
 }
 
 #[contractevent]
@@ -43,6 +45,10 @@ pub enum DataKey {
     /// Oracle price: how many fiat units per 1 whole GOLD token (7 decimals).
     /// E.g. 1 gram gold = 90,000 ARS → stored as 90_000_0000000 (with 7 decimals)
     OraclePrice,
+    /// Ledger sequence number of the last oracle price update.
+    OracleLastUpdate,
+    /// Descriptive source string of the price feed (e.g. "gold-api.com").
+    OracleSource,
 }
 
 // ============================================================================
@@ -91,6 +97,13 @@ impl AurumContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::GoldToken, &gold_token);
         env.storage().instance().set(&DataKey::OraclePrice, &oracle_price_fiat);
+        
+        let ledger_timestamp = env.ledger().timestamp();
+        env.storage().instance().set(&DataKey::OracleLastUpdate, &ledger_timestamp);
+        
+        // Initial price comes from the initialization script
+        let source = String::from_str(&env, "genesis/init");
+        env.storage().instance().set(&DataKey::OracleSource, &source);
 
         InitEvent {
             admin,
@@ -107,7 +120,8 @@ impl AurumContract {
     /// Update the oracle price. Only admin can call this.
     ///
     /// - `new_price`: New price of 1 GOLD in fiat (with 7 decimals).
-    pub fn set_oracle_price(env: Env, admin: Address, new_price: i128) {
+    /// - `source`: Descriptive origin of the price (e.g. "gold-api.com").
+    pub fn set_oracle_price(env: Env, admin: Address, new_price: i128, source: String) {
         admin.require_auth();
 
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
@@ -118,9 +132,18 @@ impl AurumContract {
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        env.storage().instance().set(&DataKey::OraclePrice, &new_price);
+        let ledger_timestamp = env.ledger().timestamp();
 
-        OraclePriceUpdated { new_price }.publish(&env);
+        env.storage().instance().set(&DataKey::OraclePrice, &new_price);
+        env.storage().instance().set(&DataKey::OracleLastUpdate, &ledger_timestamp);
+        env.storage().instance().set(&DataKey::OracleSource, &source);
+
+        OraclePriceUpdated {
+            new_price,
+            source,
+            timestamp: ledger_timestamp,
+        }
+        .publish(&env);
     }
 
     /// Get the current oracle price (1 GOLD in fiat, 7 decimals).
@@ -130,6 +153,34 @@ impl AurumContract {
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         env.storage().instance().get(&DataKey::OraclePrice).unwrap()
+    }
+
+    /// Get full oracle information: (price, last_update_timestamp, source).
+    ///
+    /// Returns a Vec with 3 elements for simplicity:
+    /// [0] = price (i128), [1] = last_update ledger timestamp (i128), [2] = source as i128 (0)
+    /// For richer data, use individual getters.
+    pub fn get_oracle_last_update(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        env.storage()
+            .instance()
+            .get(&DataKey::OracleLastUpdate)
+            .unwrap_or(0)
+    }
+
+    /// Get the oracle data source description.
+    pub fn get_oracle_source(env: Env) -> String {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        env.storage()
+            .instance()
+            .get(&DataKey::OracleSource)
+            .unwrap_or(String::from_str(&env, "not set"))
     }
 
     // ========================================================================
@@ -346,8 +397,10 @@ mod test {
 
         // Update price to 95,000 ARS
         let new_price: i128 = 95_000_0000000;
-        client.set_oracle_price(&admin, &new_price);
+        let source = String::from_str(&env, "gold-api.com");
+        client.set_oracle_price(&admin, &new_price, &source);
         assert_eq!(client.get_oracle_price(), new_price);
+        assert_eq!(client.get_oracle_source(), source);
     }
 
     #[test]

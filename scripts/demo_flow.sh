@@ -41,10 +41,23 @@ echo -e "  ${CYAN}Network:${NC}        Stellar Testnet"
 sleep 2
 
 # ============================================================================
-# Scene 1: Show Oracle Price
+# Scene 0: Real-Time Oracle Update
 # ============================================================================
 
-echo -e "\n${BOLD}${YELLOW}━━━ SCENE 1: Oracle Price Check ━━━${NC}"
+echo -e "\n${BOLD}${YELLOW}━━━ SCENE 0: 🔮 Real-Time Oracle Update ━━━${NC}"
+echo -e "  Fetching live gold price from ${MAGENTA}gold-api.com${NC}..."
+echo ""
+
+# Run oracle feeder (one-shot, updates the contract with real price)
+bash "$SCRIPT_DIR/oracle_feeder.sh" 2>/dev/null || echo -e "  ${YELLOW}⚠️  Oracle feeder skipped (run manually if needed)${NC}"
+
+sleep 2
+
+# ============================================================================
+# Scene 1: Show Oracle Price (now REAL, not hardcoded)
+# ============================================================================
+
+echo -e "\n${BOLD}${YELLOW}━━━ SCENE 1: 📈 Oracle Price Check (LIVE DATA) ━━━${NC}"
 
 ORACLE_PRICE=$(stellar contract invoke \
     --id "$AURUM_CONTRACT_ID" \
@@ -53,8 +66,19 @@ ORACLE_PRICE=$(stellar contract invoke \
     -- \
     get_oracle_price 2>/dev/null | tr -d '"')
 
+ORACLE_SOURCE=$(stellar contract invoke \
+    --id "$AURUM_CONTRACT_ID" \
+    --network testnet \
+    --source-account user1 \
+    -- \
+    get_oracle_source 2>/dev/null | tr -d '"')
+
+# Convert from 7 decimals
+FORMATTED_PRICE=$(echo "scale=2; $ORACLE_PRICE / 10000000" | bc 2>/dev/null || echo "$ORACLE_PRICE")
+
 echo -e "  📈 Current GOLD Price: ${MAGENTA}$ORACLE_PRICE${NC} (raw, 7 decimals)"
-echo -e "  📈 Human readable:     ${MAGENTA}1 gram gold = 90,000 ARS${NC}"
+echo -e "  📈 Human readable:     ${MAGENTA}1 gram gold = $FORMATTED_PRICE ARS${NC}"
+echo -e "  📡 Source:             ${CYAN}$ORACLE_SOURCE${NC}"
 
 sleep 2
 

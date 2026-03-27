@@ -164,12 +164,36 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "OracleLastUpdate"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "OraclePrice"
                           }
                         ]
                       },
                       "val": {
                         "i128": "900000000000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "OracleSource"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "genesis/init"
                       }
                     }
                   ]
