@@ -86,11 +86,7 @@ for NAME in distributor user1 user2 merchant; do
     stellar tx new change-trust \
         --line "GOLD:$ISSUER_ADDR" \
         --source-account "$NAME" \
-        --network testnet \
-        --build-only \
-        2>/dev/null | \
-    stellar tx sign --source-account "$NAME" --network testnet --build-only 2>/dev/null | \
-    stellar tx send --network testnet 2>/dev/null || \
+        --network testnet 2>/dev/null || \
     echo -e "    ℹ️  Trustline may already exist"
     sleep 1
 done
@@ -107,12 +103,9 @@ echo -e "  🏦 Minting 10,000 GOLD to distributor..."
 stellar tx new payment \
     --destination "$DISTRIBUTOR_ADDR" \
     --asset "GOLD:$ISSUER_ADDR" \
-    --amount 10000 \
+    --amount 100000000000 \
     --source-account issuer \
-    --network testnet \
-    --build-only 2>/dev/null | \
-stellar tx sign --source-account issuer --network testnet --build-only 2>/dev/null | \
-stellar tx send --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
+    --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
 
 sleep 2
 
@@ -121,12 +114,9 @@ echo -e "  📤 Distributing 100 GOLD to user1..."
 stellar tx new payment \
     --destination "$USER1_ADDR" \
     --asset "GOLD:$ISSUER_ADDR" \
-    --amount 100 \
+    --amount 1000000000 \
     --source-account distributor \
-    --network testnet \
-    --build-only 2>/dev/null | \
-stellar tx sign --source-account distributor --network testnet --build-only 2>/dev/null | \
-stellar tx send --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
+    --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
 
 sleep 1
 
@@ -134,12 +124,9 @@ echo -e "  📤 Distributing 50 GOLD to user2..."
 stellar tx new payment \
     --destination "$USER2_ADDR" \
     --asset "GOLD:$ISSUER_ADDR" \
-    --amount 50 \
+    --amount 500000000 \
     --source-account distributor \
-    --network testnet \
-    --build-only 2>/dev/null | \
-stellar tx sign --source-account distributor --network testnet --build-only 2>/dev/null | \
-stellar tx send --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
+    --network testnet 2>/dev/null || echo -e "  ⚠️  Payment may have failed"
 
 echo -e "  ✅ GOLD tokens issued and distributed"
 
